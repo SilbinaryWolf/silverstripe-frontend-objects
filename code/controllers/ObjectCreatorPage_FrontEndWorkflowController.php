@@ -12,12 +12,15 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 		'doFrontEndAction',
 	);
 
+	protected $recordID = 0;
+
 	public $parentController = null;
 
-	public function __construct() {
+	public function __construct($request = null, $recordID = null) {
 		$this->parentController = Controller::curr();
 		parent::__construct();
-		$this->request = $this->parentController->request;
+		$this->request = $request;
+		$this->recordID = $recordID;
 	}
 
 	public function index($request) {
@@ -158,7 +161,9 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 		if (!$form) {
 			return '';
 		}
-
+		$form->setController($this);
+		// NOTE(Jake): Undo 'FrontEndWorkflowController' name as it's incorrect for this context.
+		$form->setName(__FUNCTION__);
 		$this->parentController->editObject = $contextObj; // Set 'editObject' for 'CreateForm' function.
 
 		$objFields = null;
@@ -189,11 +194,6 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 		}
 		$form->loadDataFrom($contextObj);
 		$this->extend('updateFrontEndWorkflowForm', $form);
-
-		$reviewID = (int)$this->request->param('ID');
-		if ($reviewID) {
-			return $form->httpSubmission($this->request);
-		}
 		return $form;
 	}
 
@@ -207,6 +207,7 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 	}
 
 	public function doFrontEndAction(array $data, Form $form, SS_HTTPRequest $request) {
+		Debug::dump("back to the review!"); exit;
 		parent::doFrontEndAction($data, $form, $request);
 		return $this->redirect($this->parentController->Link('review'));
 	}
@@ -243,18 +244,14 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 	 * Get ID to query with in getContextObject
 	 */
 	protected function getContextID() {
-		$result = (int)$this->request->param('Action');
-		if ($result) {
-			return $result;
-		}
-		return (int)$this->request->param('ID');
+		return $this->recordID;
 	}
 
 	/**
 	 * Get ClassName to query with in getContextObject
 	 */
 	public function getContextType() {
-		return $this->parentController->CreateType;
+		return $this->parentController->data()->CreateType;
 	}
 
 	public function getWorkflowDefinition() {
@@ -263,6 +260,6 @@ class ObjectCreatorPage_FrontEndWorkflowController extends FrontEndWorkflowContr
 	}
 
 	public function Link($action = null){
-		return Controller::join_links(Director::baseURL(), $this->parentController->Link(), 'review', $action);
+		return Controller::join_links(Director::baseURL(), $this->parentController->Link(), 'review', $this->recordID, $action);
 	}
 }

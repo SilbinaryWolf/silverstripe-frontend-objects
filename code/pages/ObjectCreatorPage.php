@@ -375,12 +375,12 @@ class ObjectCreatorPage_Controller extends Page_Controller {
 			return $this->httpError(404);
 		}
 
-		$request->shiftAllParams();
-        $request->shift();
-		$controller = ObjectCreatorPage_FrontEndWorkflowController::create();
+		$recordID = $request->shift();
+		$controller = ObjectCreatorPage_FrontEndWorkflowController::create($request, $recordID);
+		return $controller;
 
 		// Execute action on sub-controller
-		$action = $request->param('Action');
+		/*$action = $request->param('Action');
 		if (is_numeric($action) || !$action) {
 			$action = 'index';
 		}
@@ -397,7 +397,7 @@ class ObjectCreatorPage_Controller extends Page_Controller {
 			}
 			return $this->httpError(403, "Action '$action' isn't allowed $classMessage.");
 		}
-		return $controller->handleAction($request, $action);
+		return $controller->handleAction($request, $action);*/
 	}
 
 	public function edit($request) {
