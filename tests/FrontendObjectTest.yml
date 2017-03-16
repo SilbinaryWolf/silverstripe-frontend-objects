@@ -1,0 +1,12 @@
+# Permission:
+#   admin:
+#     Code: ADMIN
+#   security-admin:
+#     Code: CMS_ACCESS_SecurityAdmin
+Group:
+  author:
+    Title: Page Author
+    Code: page-author
+  approver:
+    Title: Page Approver
+    Code: page-approver
