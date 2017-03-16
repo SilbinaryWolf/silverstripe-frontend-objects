@@ -4,9 +4,18 @@
 #   security-admin:
 #     Code: CMS_ACCESS_SecurityAdmin
 Group:
-  author:
-    Title: Page Author
-    Code: page-author
+  creator:
+    Title: Page Creator
+    Code: page-creator
   approver:
     Title: Page Approver
     Code: page-approver
+Member:
+  creatorMember:
+    FirstName: Page 
+    Surname: Creator
+    Email: page-creator@localhost
+  approverMember:
+    FirstName: Page 
+    Surname: Approver
+    Email: page-approver@localhost
