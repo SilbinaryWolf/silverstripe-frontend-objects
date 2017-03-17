@@ -15,7 +15,9 @@ Member:
     FirstName: Page 
     Surname: Creator
     Email: page-creator@localhost
+    Groups: =>Group.creator
   approverMember:
     FirstName: Page 
     Surname: Approver
     Email: page-approver@localhost
+    Groups: =>Group.approver

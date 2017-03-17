@@ -4,6 +4,8 @@ class FrontendObjectTest extends FunctionalTest
 {
     protected $usesDatabase = true;
 
+    protected static $fixture_file = 'FrontendObjectTest.yml';
+
     protected $objectCreatorPage = null;
 
     protected $extraDataObjects = array(
@@ -24,6 +26,7 @@ class FrontendObjectTest extends FunctionalTest
         }
 
         // Config
+        new FrontendObjectTestPage;
         $PAGE_TYPE = 'FrontendObjectTestPage';
         ObjectCreatorPage::config()->createable_types = array(
             $PAGE_TYPE,
@@ -32,6 +35,9 @@ class FrontendObjectTest extends FunctionalTest
         // Import Workflow
         $workflowDef = $this->importDefinition(dirname(__FILE__).'/PageAuthorAndApprover.yml');
         $this->assertTrue($workflowDef && $workflowDef->exists());
+        $workflowDef = WorkflowDefinition::get()->byID($workflowDef->ID);
+        //Debug::dump($workflowDef->Actions()->count());
+        //Debug::dump($workflowDef->Actions()->map('ID', 'ID')->toArray()); exit;
 
         // 
         $page = new ObjectCreatorPage;
@@ -39,11 +45,13 @@ class FrontendObjectTest extends FunctionalTest
         $page->URLSegment = 'create-page-workflow';
         $page->CreateType = $PAGE_TYPE;
         $page->CreateLocationID = $page->ID;
+        $page->PublishOnCreate = false;
         $page->WorkflowDefinitionID = $workflowDef->ID;
         $page->ReviewWithPageTemplate = true;
         $page->SuccessMessage = '<p class="frontend-objects-created">Page created successfully.</p>';
         $page->EditingSuccessMessage = '<p class="frontend-objects-edited">Page edited successfully.</p>';
 
+        $page->CanViewType = 'OnlyTheseUsers';
         $page->ViewerGroups()->add($this->objFromFixture('Group', 'creator'));
         $page->ViewerGroups()->add($this->objFromFixture('Group', 'approver'));
 
@@ -58,24 +66,34 @@ class FrontendObjectTest extends FunctionalTest
         $form = $this->cssParser()->getBySelector('#Form_CreateForm');
         $this->assertEquals(1, count($form));
 
-        // Submit
+        // Submit and test that the page was created
         $this->submitForm('Form_CreateForm', 'action_createobject', array(
             'Title' => 'My new page',
             'Content' => '<p>The content on my page</p>',
         ));
+        $createdPage = $PAGE_TYPE::get()->first();
+        $this->assertNotNull($createdPage);
+        $this->assertEquals('My new page', $createdPage->Title);
+        $this->assertEquals('<p>The content on my page</p>', $createdPage->Content);
 
-        /*$response = $this->post(
-            '/'.$page->URLSegment.'/CreateForm',
-            array(
-                'Title' => 'My new page',
-                'Content' => '<p>The content on my page</p>',
-                'action_createobject' => 'Create',
-            )
-        );*/
-        
-        //Debug::dump($response); exit;
+        // Test to ensure user can no longer edit the page
+        $response = $this->get('/'.$page->URLSegment.'/edit/'.$createdPage->ID);
+        $html = $response->getBody();
+        $this->assertTrue(strpos($html, 'This item is not editable') !== FALSE);
+
+        // 
+        $this->logInAs('approverMember');
+        $response = $this->get('/'.$page->URLSegment.'/edit/'.$createdPage->ID);
+        $html = $response->getBody();
+        //Debug::dump($html); exit;
     }
 
+    // todo(Jake): Fix bug where 'importDefinition' doesn't work during test. WorkflowAction items
+    //             get written to a WorkflowDefID of 0. 
+    //
+    //             Solution: Improve AdvancedWorkflow to allow importing an exported definition via
+    //                       code rather than a hack.
+    //
     private function importDefinition($filepath) {
         //$yml = singleton('WorkflowDefinitionImporter')->parseYAMLImport($filepath);
 
@@ -89,22 +107,6 @@ class FrontendObjectTest extends FunctionalTest
         $createdItemSet = $bulkLoaderResults->Created()->toArray();
         $createdItem = reset($createdItemSet);
         return $createdItem;
-
-        // todo(Jake): remove
-        //$filepath = dirname(__FILE__).'/WorkflowDefinition.yml';
-        /*$record = singleton('WorkflowDefinitionImporter')->parseYAMLImport($filepath);
-        $struct = $record['Injector']['ExportedWorkflow'];
-        $template = Injector::inst()->createWithArgs('WorkflowTemplate', $struct['constructor']);
-        $template->setStructure($struct['properties']['structure']);
-
-        $def = new WorkflowDefinition;
-        $def->workflowService = singleton('WorkflowService');
-        $def->Template = $template->getName();
-        // NOTE(Jake): Required to avoid DB::query() error during unit test
-        //$def->Sort = 1;
-        singleton('WorkflowService')->defineFromTemplate($def, $def->Template);
-        //$def->write();
-        return $def;*/
     }
 
     /*private function assertMatchCountBySelector($selector, $expectedCount) {

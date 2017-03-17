@@ -12,7 +12,7 @@ class FrontendObjectTestPage extends Page implements TestOnly
 
         $fields = new FieldList;
         foreach ($cmsFieldsWhitelist as $fieldName) {
-            $field = $fields->dataFieldByName($fieldName);
+            $field = $cmsFields->dataFieldByName($fieldName);
             if (!$field) {
                 continue;
             }

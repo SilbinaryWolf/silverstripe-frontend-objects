@@ -12,7 +12,6 @@ Injector:
       - 1
     properties:
       structure:
-        users:
         'Apply for approval':
           type: AssignUsersToWorkflowAction
           transitions:
