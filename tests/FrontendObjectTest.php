@@ -26,14 +26,16 @@ class FrontendObjectTest extends FunctionalTest
         }
 
         // Config
-        new FrontendObjectTestPage;
         $PAGE_TYPE = 'FrontendObjectTestPage';
         ObjectCreatorPage::config()->createable_types = array(
             $PAGE_TYPE,
         );
 
+        $workflowImporter = singleton('WorkflowDefinitionImporter');
+        // NOTE: Advaned Workflow 3.8+ 
+        $this->assertTrue(method_exists($workflowImporter, 'importWorkflowDefinitionFromYAML'));
         // Import Workflow
-        $workflowDef = $this->importDefinition(dirname(__FILE__).'/PageAuthorAndApprover.yml');
+        $workflowDef = $workflowImporter->importWorkflowDefinitionFromYAML(dirname(__FILE__).'/PageAuthorAndApprover.yml');
         $this->assertTrue($workflowDef && $workflowDef->exists());
         $workflowDef = WorkflowDefinition::get()->byID($workflowDef->ID);
         //Debug::dump($workflowDef->Actions()->count());
@@ -48,6 +50,7 @@ class FrontendObjectTest extends FunctionalTest
         $page->PublishOnCreate = false;
         $page->WorkflowDefinitionID = $workflowDef->ID;
         $page->ReviewWithPageTemplate = true;
+        $page->AllowEditing = true;
         $page->SuccessMessage = '<p class="frontend-objects-created">Page created successfully.</p>';
         $page->EditingSuccessMessage = '<p class="frontend-objects-edited">Page edited successfully.</p>';
 
@@ -58,70 +61,89 @@ class FrontendObjectTest extends FunctionalTest
         $page->write();
         $page->publish('Stage', 'Live');
 
-        //
-        $this->logInAs('creatorMember');
-
-        //
+        // Ensure a non-logged in user cannot see the form
+        $this->logInAs(0);
         $this->get('/'.$page->URLSegment);
-        $form = $this->cssParser()->getBySelector('#Form_CreateForm');
-        $this->assertEquals(1, count($form));
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+
+        // Ensure a creatorMember can create objects on the form
+        $this->logInAs('creatorMember');
+        $this->get('/'.$page->URLSegment);
+        $this->assertEquals(1, count($this->cssParser()->getBySelector('#Form_CreateForm')));
 
         // Submit and test that the page was created
         $this->submitForm('Form_CreateForm', 'action_createobject', array(
             'Title' => 'My new page',
             'Content' => '<p>The content on my page</p>',
         ));
-        $createdPage = $PAGE_TYPE::get()->first();
+        $createdPage = $PAGE_TYPE::get()->sort('ID')->last();
         $this->assertNotNull($createdPage);
         $this->assertEquals('My new page', $createdPage->Title);
         $this->assertEquals('<p>The content on my page</p>', $createdPage->Content);
 
-        // Test to ensure user can no longer edit the page
-        $response = $this->get('/'.$page->URLSegment.'/edit/'.$createdPage->ID);
-        $html = $response->getBody();
-        $this->assertTrue(strpos($html, 'This item is not editable') !== FALSE);
+        // Constants
+        $EDIT_PAGE_URL = '/'.$page->URLSegment.'/edit/'.$createdPage->ID;
+        $REVIEW_PAGE_URL = '/'.$page->URLSegment.'/review/'.$createdPage->ID;
+
+        // Test to ensure 'creatorMember' user can no longer edit the page
+        $this->get($EDIT_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
 
         // 
         $this->logInAs('approverMember');
-        $response = $this->get('/'.$page->URLSegment.'/edit/'.$createdPage->ID);
-        $html = $response->getBody();
-        //Debug::dump($html); exit;
+
+        // todo(Jake): Investigate why this gets a 'Page does not exist' error to ensure the 
+        //             edit button doesn't have breakage.
+        /*$this->get($REVIEW_PAGE_URL);
+        $this->assertEquals(1, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
+        $response = $this->submitForm('FrontendWorkflowForm_Form2', 'action_doEdit', array(
+            'ID' => $createdPage->ID,
+        ));
+        Debug::dump($response->getBody()); exit;*/
+
+        $this->get($EDIT_PAGE_URL);
+        $this->assertEquals(1, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+
+        $this->submitForm('Form_CreateForm', 'action_editobject', array(
+            'Title' => 'My new page updated title',
+            'Content' => '<p>The updated content on my page</p>',
+        ));
+        // Reload as the object should be updated
+        $createdPage = $PAGE_TYPE::get()->byID($createdPage->ID);
+        $this->assertNotNull($createdPage);
+        $this->assertEquals('My new page updated title', $createdPage->Title);
+        $this->assertEquals('<p>The updated content on my page</p>', $createdPage->Content);
+
+        // Ensure saving/updating does not give 'creatorMember' access again / break workflow
+        $this->logInAs('creatorMember');
+        $this->get($EDIT_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+
+        //
+        $this->logInAs('approverMember');
+        $response = $this->get($REVIEW_PAGE_URL);
+        $this->assertEquals(1, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
+
+        // Get 'Approve' action name from HTML
+        $actionName = ''; // ie.  action_transition_3
+        $actionButtons = $this->cssParser()->getBySelector('.action');
+        foreach ($actionButtons as $actionButton) {
+            $attributes = $actionButton->attributes();
+            $value = $attributes['value']->__toString();
+            if ($value === 'Approve') {
+                $actionName = $attributes['name'];
+                break;
+            }
+        }
+        $this->assertNotEquals('', $actionName);
+
+        //Debug::dump($actionName);
+        Debug::dump($response->getBody());
+
+        // note: Silverstripe/3.5.3/create-page-workflow/review/Form/2
+        $response = $this->submitForm('FrontendWorkflowForm_Form2', $actionName, array(
+        ));
+
+        Debug::dump($response->getBody()); exit;
     }
-
-    // todo(Jake): Fix bug where 'importDefinition' doesn't work during test. WorkflowAction items
-    //             get written to a WorkflowDefID of 0. 
-    //
-    //             Solution: Improve AdvancedWorkflow to allow importing an exported definition via
-    //                       code rather than a hack.
-    //
-    private function importDefinition($filepath) {
-        //$yml = singleton('WorkflowDefinitionImporter')->parseYAMLImport($filepath);
-
-        $workflowBulkLoader = new WorkflowBulkLoader('WorkflowDefinition');
-
-        $method = new ReflectionMethod($workflowBulkLoader, 'processAll');
-        $method->setAccessible(true);
-        /** @var BulkLoader_Result $bulkLoaderResults **/
-        $bulkLoaderResults = $method->invoke($workflowBulkLoader, $filepath);
-
-        $createdItemSet = $bulkLoaderResults->Created()->toArray();
-        $createdItem = reset($createdItemSet);
-        return $createdItem;
-    }
-
-    /*private function assertMatchCountBySelector($selector, $expectedCount) {
-        if(is_string($expectedMatches)) $expectedMatches = array($expectedMatches);
-
-        $items = $this->cssParser()->getBySelector($selector);
-        $itemsCount = count($items);
-
-        $this->assertTrue(
-            $expectedMatches == $actuals,
-                "Failed asserting the CSS selector '$selector' returns $expectedCount:\n'"
-                . implode("'\n'", $expectedMatches) . "'\n\n"
-                . "Instead $itemsCount results were found.\n'"
-        );
-
-        return count($items);
-    }*/
 }

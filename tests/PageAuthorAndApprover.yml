@@ -14,6 +14,8 @@ Injector:
       structure:
         'Apply for approval':
           type: AssignUsersToWorkflowAction
+          groups:
+            - title: 'Page Approver'
           transitions:
             - Send notification: 'Notify approver'
           properties:
