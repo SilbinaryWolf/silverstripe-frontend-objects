@@ -5,7 +5,7 @@
 	"require": {
 		"silverstripe/framework": "~3.1",
 		"silverstripe/multivaluefield": "~2.0",
-		"silverstripe/advancedworkflow": "~3.1"
+		"silverstripe/advancedworkflow": "~3.8"
 	},
 	"extra": {
 		"installer-name": "frontend-objects",

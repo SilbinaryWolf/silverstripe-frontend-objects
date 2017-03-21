@@ -16,10 +16,6 @@ class FrontendObjectTest extends FunctionalTest
         parent::setUp();
     }
 
-    //public function testBasic() {
-    //    $response = $this->get('/create-page');
-    //}
-
     public function testPageAuthorAndApprover() {
         if (!class_exists('WorkflowDefinition')) {
             return;
@@ -32,14 +28,12 @@ class FrontendObjectTest extends FunctionalTest
         );
 
         $workflowImporter = singleton('WorkflowDefinitionImporter');
-        // NOTE: Advaned Workflow 3.8+ 
+        // NOTE: Requires Advaned Workflow 3.8+ 
         $this->assertTrue(method_exists($workflowImporter, 'importWorkflowDefinitionFromYAML'));
         // Import Workflow
         $workflowDef = $workflowImporter->importWorkflowDefinitionFromYAML(dirname(__FILE__).'/PageAuthorAndApprover.yml');
         $this->assertTrue($workflowDef && $workflowDef->exists());
         $workflowDef = WorkflowDefinition::get()->byID($workflowDef->ID);
-        //Debug::dump($workflowDef->Actions()->count());
-        //Debug::dump($workflowDef->Actions()->map('ID', 'ID')->toArray()); exit;
 
         // 
         $page = new ObjectCreatorPage;
@@ -92,23 +86,22 @@ class FrontendObjectTest extends FunctionalTest
         // 
         $this->logInAs('approverMember');
 
-        // todo(Jake): Investigate why this gets a 'Page does not exist' error to ensure the 
-        //             edit button doesn't have breakage.
-        /*$this->get($REVIEW_PAGE_URL);
+        // Test loading the review page and then clicking the 'edit' button
+        $this->get($REVIEW_PAGE_URL);
         $this->assertEquals(1, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
         $response = $this->submitForm('FrontendWorkflowForm_Form2', 'action_doEdit', array(
             'ID' => $createdPage->ID,
         ));
-        Debug::dump($response->getBody()); exit;*/
 
+        // Test visiting the 'edit' page directly, this should work without needing to click
+        // the edit button
         $this->get($EDIT_PAGE_URL);
         $this->assertEquals(1, count($this->cssParser()->getBySelector('#Form_CreateForm')));
-
         $this->submitForm('Form_CreateForm', 'action_editobject', array(
             'Title' => 'My new page updated title',
             'Content' => '<p>The updated content on my page</p>',
         ));
-        // Reload as the object should be updated
+        // Reload the updated values from the DB
         $createdPage = $PAGE_TYPE::get()->byID($createdPage->ID);
         $this->assertNotNull($createdPage);
         $this->assertEquals('My new page updated title', $createdPage->Title);
@@ -137,13 +130,28 @@ class FrontendObjectTest extends FunctionalTest
         }
         $this->assertNotEquals('', $actionName);
 
-        //Debug::dump($actionName);
-        Debug::dump($response->getBody());
+        $response = $this->submitForm('FrontendWorkflowForm_Form2', $actionName, array());
+        // Ensure an error page wasn't hit and that the forms have been hidden.
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
+        // TODO(Jake): Add default "review item listing" functionality and check for it.
 
-        // note: Silverstripe/3.5.3/create-page-workflow/review/Form/2
-        $response = $this->submitForm('FrontendWorkflowForm_Form2', $actionName, array(
-        ));
+        // Once workflow is finished and page is published, the approver should not be able 
+        // edit or review. (ie. form should not exist)
+        $this->get($EDIT_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+        $this->get($REVIEW_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
 
-        Debug::dump($response->getBody()); exit;
+        // After workflow has finished, ensure original 'creatorMember' cannot edit or review
+        $this->logInAs('creatorMember');
+        $this->get($EDIT_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#Form_CreateForm')));
+        $this->get($REVIEW_PAGE_URL);
+        $this->assertEquals(0, count($this->cssParser()->getBySelector('#FrontendWorkflowForm_Form2')));
+    }
+
+    public function testN() {
     }
 }
