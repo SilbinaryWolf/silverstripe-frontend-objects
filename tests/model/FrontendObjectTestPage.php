@@ -1,6 +1,5 @@
 <?php
 
-// todo(Jake): Add 'implements TestOnly'
 class FrontendObjectTestPage extends Page implements TestOnly
 {
     public function getFrontendCreateFields() {
